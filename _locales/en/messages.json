@@ -1,0 +1,10 @@
+{
+   "appDesc": {
+      "description": "The description of the application, as shown on the web store.",
+      "message": "Hides Twitter Screenshots from 4Chan"
+   },
+   "appName": {
+      "description": "Title of the application, as displayed on the web store.",
+      "message": "Hide Twitter Screenshots"
+   }
+}

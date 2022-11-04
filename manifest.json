@@ -1,0 +1,33 @@
+{
+  "author": "news.coffee",
+  "name": "Hide Twitter Screenshot Threads",
+  "version": "1.0.0",
+  "manifest_version": 2,
+  "description": "Hides twitter screenshot threads from imageboards",
+  "homepage_url": "https://github.com/newscoffee/hide-twitter-screenshot-threads",
+  "permissions": [
+      "*://*.4chan.org/*", "*://*.4channel.org/*", "*://*.4cdn.org/*", "storage", "tabs"
+  ],
+  "icons": {
+    "128": "icon/128.png",
+    "16": "icon/16.png",
+    "19": "icon/19.png",
+    "38": "icon/38.png",
+    "48": "icon/48.png"
+  },
+  "default_locale": "en",
+  "content_scripts": [ {
+    "js": [ "content-script.js" ],
+    "css": ["main.css"],
+    "run_at": "document_start",
+    "matches": [ "*://*.4chan.org/*", "*://*.4channel.org/*", "*://*.4cdn.org/*" ]
+  } ],
+  "web_accessible_resources": [ "ocrad-worker.js", "common-worker.js" ],
+  "background": {
+    "scripts": ["istwitterscreenshot.js", "background-script.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_popup": "popup.html" 
+  }
+}
