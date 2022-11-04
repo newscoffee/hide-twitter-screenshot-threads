@@ -17,4 +17,6 @@ after a thread is hidden, it will append a 'view' link and if you hover over the
 
 ![hovering over view link](https://i.imgur.com/ZEes6MF.png)
 
-you can also pin the extension to the top, and a badge indicator will show how many threads have been hidden on the page.
+you can also pin the extension's icon to the top, and a badge indicator will show how many threads have been hidden on the page.
+
+![badge](https://i.imgur.com/XedBDdO.png)
