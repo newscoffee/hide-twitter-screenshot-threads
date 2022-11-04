@@ -8,7 +8,10 @@ it occasionally results in false positives and false negatives, but from my test
 
 ---
 
-here is how it works: the extension first scans each primary image for each thread and does a series of tests to see if the thumbnail is twitter-like. if it almost certainly is, it will automatically hide the thread, and if it almost certainly isn't, it will not hide the thread. if it is uncertain as to whether it is or isn't, it will only then download the full size image and do additional tests to try and determine if the image is a twitter screenshot.
+#### how it works
+the extension first scans each primary image for every thread and performs a series of tests to try and determine if the thumbnail is twitter-like. if it almost certainly is, it will automatically hide the thread, and if it almost certainly isn't, it will not hide the thread.
+
+if it is uncertain as to whether it is or isn't, it will only then download the full size image and do additional tests to try and determine if the image is a twitter screenshot. it tries to avoid downloading too many full size images by making reasonable guesses based solely off of the thumbnail.
 
 after a thread is hidden, it will append a 'view' link and if you hover over the link, it will show a preview of the thread with a twitter logo overlay.
 
