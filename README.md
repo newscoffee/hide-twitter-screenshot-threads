@@ -19,6 +19,8 @@ after a thread is hidden, it will append a 'view' link and if you hover over the
 
 you can also pin the extension's icon to the top, and a badge indicator will show how many twitter screenshot threads have been hidden on the page.
 
+---
+
 ### installation
 ####chrome
 
