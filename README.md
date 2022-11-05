@@ -24,11 +24,11 @@ you can also pin the extension's icon to the top, and a badge indicator will sho
 ### installation
 ####chrome
 
-download this repo as a [ZIP file](https://github.com/newscoffee/hide-twitter-screenshot-threads/archive/refs/heads/master.zip) from GitHub.
-unzip the file and you should have a folder named hide-twitter-screenshot-threads-master.
-in chrome go to the extensions page (chrome://extensions).
-enable *Developer Mode*.
-drag the hide-twitter-screenshot-threads-master folder anywhere on the page to import it (do not delete the folder afterwards).
+- download this repo as a [ZIP file](https://github.com/newscoffee/hide-twitter-screenshot-threads/archive/refs/heads/master.zip) from GitHub.
+- unzip the file and you should have a folder named hide-twitter-screenshot-threads-master.
+- in chrome go to the extensions page (chrome://extensions).
+- enable *Developer Mode*.
+- drag the hide-twitter-screenshot-threads-master folder anywhere on the page to import it (do not delete the folder afterwards).
 
 
 #### firefox
