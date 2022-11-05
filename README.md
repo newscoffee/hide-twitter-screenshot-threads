@@ -19,7 +19,7 @@ it occasionally results in false positives and false negatives, but from my test
 
 
 #### firefox
-the latest version (`1.0.1`) of this extension is available as an [XPI file](https://github.com/newscoffee/hide-twitter-screenshot-threads/releases/download/1.0.1/hide-twitter-screenshot-threads-firefox-1.0.1.xpi)
+the latest version `1.0.1` of this extension is available as an [XPI file](https://github.com/newscoffee/hide-twitter-screenshot-threads/releases/download/1.0.1/hide-twitter-screenshot-threads-firefox-1.0.1.xpi)
 
 ---
 
