@@ -108,21 +108,21 @@ const hidetwitterscreenshotthreads = function(catalog) {
       let resolution = sub[1]
       resolution = resolution.toLowerCase().split("x")
       let width = Number(resolution[0])
-      let height = Number(resolution [1])
-      filesize = filesize.split(" ")
-      let int = Number(filesize[0])
-      let mult = filesize[1].toLowerCase()
-      if (mult === "mb") {
-        if (int > 2.3) {
-          response.evaluate = false
-        }
-      }
-      if (width > 3600) {
-        response.evaluate = false
-      }
-      if (height > 3600) {
-        response.evaluate = false
-      }
+      let height = Number(resolution[1])
+      // filesize = filesize.split(" ")
+      // let int = Number(filesize[0])
+      // let mult = filesize[1].toLowerCase()
+      // if (mult === "mb") {
+      //   if (int > 2.3) {
+      //     response.evaluate = false
+      //   }
+      // }
+      // if (width > 3600) {
+      //   response.evaluate = false
+      // }
+      // if (height > 3600) {
+      //   response.evaluate = false
+      // }
       response.width = width
       response.height = height
     }
@@ -219,8 +219,6 @@ const hidetwitterscreenshotthreads = function(catalog) {
           text = document.querySelector(`div#${threadid} .file`).innerText
         }
         catch(e) {
-          console.error(e)
-          console.error(threadid, "dom-error")
           thread.dataset.htst = "dom-error"
           return
         }
@@ -271,7 +269,7 @@ const hidetwitterscreenshotthreads = function(catalog) {
           return
         }
 
-        if (width > 2000 || height > 2600) {
+        if (width > 2100 || height > 2600) {
           thread.dataset.htst = "requested-guess"
           fullsizeurl = null
         }
