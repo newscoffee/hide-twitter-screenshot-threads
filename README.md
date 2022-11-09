@@ -8,6 +8,21 @@ it occasionally results in false positives and false negatives, but from my test
 
 ---
 
+### installation
+#### chrome
+
+- download this repo as a [ZIP file](https://github.com/newscoffee/hide-twitter-screenshot-threads/archive/refs/heads/master.zip) from GitHub.
+- unzip the file and you should have a folder named hide-twitter-screenshot-threads-master.
+- in chrome go to the extensions page (chrome://extensions).
+- enable *Developer Mode*.
+- drag the hide-twitter-screenshot-threads-master folder anywhere on the page to import it (do not delete the folder afterwards).
+
+
+#### firefox
+the latest version `1.0.1` of this extension is available as an [XPI file](https://github.com/newscoffee/hide-twitter-screenshot-threads/releases/download/1.0.1/hide-twitter-screenshot-threads-firefox-1.0.1.xpi).
+
+---
+
 ### how it works
 the extension scans the main thumbnail for every thread and performs a series of tests to try and determine if the thumbnail is twitter-like. if it almost certainly is, it will automatically hide/collapse the thread, and if it almost certainly isn't, it will not hide the thread.
 
@@ -18,5 +33,3 @@ after a thread is hidden, it will append a 'view' link and if you hover over the
 ![hovering over view link](https://i.imgur.com/ZEes6MF.png)
 
 you can also pin the extension's icon to the top, and a badge indicator will show how many twitter screenshot threads have been hidden on the page.
-
-
