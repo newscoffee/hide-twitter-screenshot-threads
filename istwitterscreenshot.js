@@ -1,5 +1,5 @@
 // https://github.com/fanfare/istwitterscreenshot
-// istwitterscreenshot v0.0.3
+// istwitterscreenshot v0.0.4
 
 const Istwitterscreenshot = function(config) {
 
@@ -1104,25 +1104,33 @@ const Istwitterscreenshot = function(config) {
       footer.darkGreyRatio = darkgreyratio
       footer.lightGreyRatio = lightgreyratio
       
+      // unsupported primary color white
+      
       if (primarycolor === "white") {
-        // assuming no "like" is clicked (heart/retweet)
-        if ( primaryratio > lightgreyratio
-          && tertiaryratio === 0
-          && primaryratio > 0.5
-          && lightgreyratio < 0.5
-          && primaryratio < .95
-          && lightgreyratio > 0.05
-          && darkgreyratio < 0.01
-          && nonratio < 0.1
-        ) {
-          // good, proceed
-        }
-        else {
-          footer.error = "oob white"
-          return false
-        }        
+        footer.error = "unsupported white primary color"
+        return false
       }
-      else if (primarycolor === "black") {
+      
+      // if (primarycolor === "white") {
+      //   // assuming no "like" is clicked (heart/retweet)
+      //   if ( primaryratio > lightgreyratio
+      //     && tertiaryratio === 0
+      //     && primaryratio > 0.5
+      //     && lightgreyratio < 0.5
+      //     && primaryratio < .95
+      //     && lightgreyratio > 0.05
+      //     && darkgreyratio < 0.01
+      //     && nonratio < 0.1
+      //   ) {
+      //     // good, proceed
+      //   }
+      //   else {
+      //     footer.error = "oob white"
+      //     return false
+      //   }        
+      // }
+      
+      if (primarycolor === "black") {
         // assuming no "like" is clicked (heart/retweet)
         if ( primaryratio > darkgreyratio
           && tertiaryratio === 0
