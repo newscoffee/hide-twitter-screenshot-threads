@@ -8083,6 +8083,8 @@ return OCRAD;
 
 importScripts("common-worker.js")
 
+// istwitterscreenshot
+
 onmessage = function(e) {
   let data = e.data
   let id = data.id
@@ -8098,7 +8100,6 @@ onmessage = function(e) {
     const reader = new FileReader()
     reader.addEventListener('loadend', (e) => {
       let data = new Uint8ClampedArray(e.target.result)
-      
       img.data = data
       var raw = []
       var text = OCRAD(img, false, function(e) {
@@ -8107,7 +8108,7 @@ onmessage = function(e) {
       postMessage({
         type: "ocradresponse",
         data: {
-          id, details, text
+          id, text
         }
       })
     })

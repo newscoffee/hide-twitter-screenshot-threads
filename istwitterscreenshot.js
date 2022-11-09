@@ -1,44 +1,57 @@
 // https://github.com/fanfare/istwitterscreenshot
-// istwitterscreenshot v0.0.2
+// istwitterscreenshot v0.0.3
 
 const Istwitterscreenshot = function(config) {
 
-  const promises = {}
-  const times = {}
-  
-  const outbound = {
-    id: null,
-    thumb: null,
-    fullsize: null,
-    guess: false
+  let debug = 0
+  if (config && config.debug === 1) {
+    debug = 1
   }
   
+  this.queue = {}
+  const items = this.queue
+  
+  let outbound = null
   let worker = null
   
   function workermessage(e) {
     let response = e.data
     if (response && response.type && response.type === "ocradresponse") {
-      let data = response.data
-      let id = data.id
-      let text = data.text
-      let details = data.details
-      ocradresponse(id, text, details)
+      let item = items[response.data.id]
+      item.text = response.data.text
+      item.outbound = false
+      item.evaltext()
     }
+    return null
   }
   
   function workererror(err) {
     console.error(err)
-    response(outbound.id, outbound.guess, {error:"ocrad error"})
-    URL.revokeObjectURL(outbound.thumb)
-    URL.revokeObjectURL(outbound.fullsize)
-    outbound.thumb = null
-    ountbound.guess = false
-    outbound.fullsize = null
-    outbound.id = null
+    const marker = crypto.randomUUID()
+    let item = items[outbound]
+    if (!item) {
+      for (id in items) {
+        if (items[id].outbound === true) {
+          item = items[id]
+          break
+        }
+      }
+      if (!item) {
+        createworker()
+        workerqueue.resume()  
+        return null
+      }
+    }
+    item.details.error = "ocrad error"
+    item.response(item.details.guess)
+    if (debug > 0) {
+      URL.revokeObjectURL(item.thumb)
+    }
+    URL.revokeObjectURL(item.fullsize)
+    outbound = null
     createworker()
-    setTimeout(()=>{
-      workerqueue.resume()
-    },1000)
+    workerqueue.resume()
+    return null
   }
   
   function createworker() {
@@ -51,57 +64,99 @@ const Istwitterscreenshot = function(config) {
     worker = new Worker('./ocrad-worker.js')
     worker.addEventListener("message", workermessage)
     worker.addEventListener("error", workererror)
+    return null
   }
 
   createworker()
-  
-  let uid = 0
-  let debug = 0
-  
-  let headerHeight = 38
-  let headerWidthDivisor = 6
-  
-  if (config && config.debug === 1) {
-    debug = 1
-  }
   
   function Queue(method) {
     this.method = method
     this.pool = []
     this.working = false
     this.resume = () => {
-      if (this.pool.length > 0) {
-        this.working = true
-        let args = this.pool.shift()
-        this.method(args)
-      }
-      else {
-        this.working = false
-      }      
+      setTimeout(()=>{
+        if (this.pool.length > 0) {
+          this.working = true
+          let item = this.pool.shift()
+          this.method(item)
+        }
+        else {
+          this.working = false
+        }          
+      },0)
     }
     this.push = (item) => {
-      this.pool.push(item)
-      if (!this.working) {
-        this.working = true
-        this.resume()
-      }
+      setTimeout(()=>{
+        this.pool.push(item)
+        if (!this.working) {
+          this.working = true
+          this.resume()
+        }        
+      },0)
     }
   }
+
+  function IsImageOk(img) {
+    if (!img.complete) {
+      return false
+    }
+    if (img.naturalWidth === 0) {
+      return false
+    }
+    return true
+  }
   
-  const response = function(id, result, details) {
-    let newtime = performance.now()
-    let oldtime = times[id]
-    let elapsed = newtime - oldtime
-    details.time = elapsed
-    details.result = result
-    let response = !debug ? result : {result, details}
-    promises[id].resolve(response)
-    delete times[id]
-    delete promises[id]
+  const evalfullsize = function(item) {
+    if (item.cancelled) {
+      return item.response(false).resumeworker()
+    }
+    return item.evalfullsize()
+  }
+  
+  const init = function(item) {
+    if (item.cancelled) {
+      return item.response(false).resumeinit()
+    }
+    return item.init()
+  }
+
+  const workerqueue = new Queue(evalfullsize)
+  const initqueue = new Queue(init)
+
+  let uid = 0
+  
+  function Item(resolve, reject, thumb, fullsizeurl, token) {
+    this.time = performance.now()
+    if (!token) {
+      token = crypto.randomUUID()
+    }
+    if (!fullsizeurl && thumb.width >= 500) {
+      fullsizeurl = thumb
+    }
+    this.id = ++uid
+    this.outbound = false
+    this.retry = false
+    this.thumb = thumb 
+    this.fullsizeurl = fullsizeurl
+    this.cancelled = false
+    this.token = token
+    this.resolve = resolve
+    this.reject = reject
+    this.details = {}
+    this.details.guess = undefined
+    this.istwitter = null
+    this.invert = false
+    this.workerqueued = false
+    this.realfullsize = fullsizeurl ? true : false
+    items[this.id] = this
+    initqueue.push(this)
     return null
   }
   
-  const ocradresponse = function(id, text, details) {
+  Item.prototype.evaltext = function() {
+    
+    const { text, details } = this
+    
     if (!debug || debug <= 0) {
       URL.revokeObjectURL(details.ocrad.fullsize.url)
     }
@@ -177,35 +232,298 @@ const Istwitterscreenshot = function(config) {
       else if (lowercase.indexOf(" followers") > -1 && lowercase.indexOf(" following") > -1) {
         wordmatch = "followersfollowing"
       }
+      
       if (!wordmatch) {
-        lowercase = lowercase.substring(0,384)
-        if ( lowercase.indexOf("@") > -1 
+        let llowercase = lowercase.substring(0,384)
+        if ( llowercase.indexOf("@") > -1 
           && details
           && details.evaluations
           && details.evaluations.textcolor
           && details.evaluations.textcolor.header
-          && details.evaluations.textcolor.header.primaryColor !== null) {
+          && details.evaluations.textcolor.header.left
+          && (details.evaluations.textcolor.header.primaryColor !== null
+            ||details.evaluations.textcolor.header.left.primaryColor !== null)) {
           wordmatch = "@" 
+        }
+      }
+      if (!wordmatch) {
+        
+        let llowercase = lowercase.substring(0,2000)
+        let poundcount = llowercase.length - llowercase.replaceAll('#', '').length
+        if ((poundcount === 4 || poundcount === 8)
+          && details
+          && details.evaluations
+          && details.evaluations.textcolor
+          && details.evaluations.textcolor.header
+          && ((details.evaluations.textcolor.header.whiteCount / details.evaluations.textcolor.header.allCount > .4)
+            ||(details.evaluations.textcolor.header.blackCount / details.evaluations.textcolor.header.allCount > .4))) {
+          wordmatch = "#" 
         }
       }
       details.ocrad.word = wordmatch
       details.ocrad.text = text
-      response(id, !!wordmatch, details)
+      return this.response(!!wordmatch).resumeworker()
     }
     else {
       details.ocrad.word = null
       details.ocrad.text = null
-      response(id, false, details)
+      return this.response(false).resumeworker()
     }
-    setTimeout(()=>{
-      workerqueue.resume()
-    },0)
+  }
+
+  Item.prototype.evalfullsize = function() {
+    
+    let { id, fullsizeurl, invert, realfullsize, cancelled } = this
+    
+    if (cancelled) {
+      return this.response(item.details.guess).resumeworker()
+    }
+    
+    let details = this.details
+    
+    const imageloaded = (image) => {
+
+      if (!IsImageOk(image)) {
+        return this.response(this.guess).resumeworker()
+      }
+      
+      this.retry = false
+      let primarycolor = details.evaluations.textcolor.header.primaryColor
+      if (primarycolor === "white") {
+        this.retry = true
+        this.thumb = image
+        const { istwitter } = this.evalthumb()
+        if (istwitter) {
+          return this.response(true).resumeworker()
+        }
+      }
+      
+      let width = image.width
+      let height = image.height
+      let destwidth = width
+      let destheight = height
+      let canvas = document.createElement("canvas")
+      if (width !== 1000) {
+        destheight = Math.floor((1000/width) * height)
+        destwidth = 1000      
+      }
+      if (destheight > 2800) {
+        details.abort = "image too tall"
+        return this.response(false).resumeworker()
+      }
+      canvas.width = destwidth
+      canvas.height = destheight
+      let lctx = canvas.getContext("2d")
+      lctx.drawImage(image, 
+        0, 0, width, height, 
+        0, 0, destwidth, destheight
+      )
+      // trim this canvas with the same percentage as the thumbnail
+      let ct = details.evaluations.crop && details.evaluations.crop.offsetTop   ? details.evaluations.crop.offsetTop   : 0
+      let cl = details.evaluations.crop && details.evaluations.crop.offsetLeft  ? details.evaluations.crop.offsetLeft  : 0
+      let cr = details.evaluations.crop && details.evaluations.crop.offsetRight ? details.evaluations.crop.offsetRight : 0
+      let tt = details.evaluations.trim.top    > 4 ? details.evaluations.trim.top     - 4 : 0
+      let tl = details.evaluations.trim.left   > 4 ? details.evaluations.trim.left    - 4 : 0
+      let tb = details.evaluations.trim.bottom > 4 ? details.evaluations.trim.bottom  - 4 : 0
+      let tr = details.evaluations.trim.right  > 4 ? details.evaluations.trim.right   - 4 : 0
+      
+      ctr = Math.floor((ct / details.thumb.oldHeight) * destheight )
+      clr = Math.floor((cl / details.thumb.oldWidth ) * destwidth  )
+      crr = Math.floor((cr / details.thumb.oldWidth ) * destwidth  )
+      ttr = Math.floor((tt / details.thumb.oldHeight) * destheight )
+      tlr = Math.floor((tl / details.thumb.oldWidth ) * destwidth  )
+      tbr = Math.floor((tb / details.thumb.oldHeight) * destheight )
+      trr = Math.floor((tr / details.thumb.oldWidth ) * destwidth  )
+      
+      let xttl = clr + tlr
+      let xttb = tbr
+      let xttr = crr + trr
+      let xttt = ctr + ttr
+      
+      let xnw = destwidth - xttl - xttr
+      let xnh = destheight - xttt - xttb
+      
+      let clonecanvas = document.createElement('canvas')
+      let clonectx = clonecanvas.getContext('2d')
+      clonecanvas.width = xnw
+      clonecanvas.height = xnh
+      clonectx.drawImage(canvas,(xttl * -1), (xttt * -1))
+      
+      canvas = null
+      lctx = null
+      destwidth = null
+      destheight = null
+      
+      canvas = clonecanvas
+      lctx = clonectx
+      destwidth = xnw
+      destheight = xnh
+      
+      lctx.fillStyle = invert ? "#000" : "#fff"
+      
+      lctx.fillRect(0,0,5,destheight)
+      lctx.fillRect(0,0,destwidth,5)
+      
+      const fxcanvas = document.createElement("canvas")
+      const fxctx = fxcanvas.getContext("2d")
+      let fxwidth
+      let fxheight
+      
+      let fxhpma = (destheight * 1/3) > 500 ? 500 : (destheight * 1/3)
+      let fxhpmb = (destheight * 1/5) > 300 ? 300 : (destheight * 1/5)
+      
+      fxwidth = Math.floor((destwidth * 2/3) * 2)
+      fxheight = Math.floor((fxhpma * 2) + (fxhpmb * 4))
+      
+      fxctx.fillStyle="#fff"
+      fxctx.fillRect(0,0,fxwidth,fxheight)
+      fxcanvas.width = fxwidth
+      fxcanvas.height = fxheight
+      fxctx.save()
+      
+      if (invert) {
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+12}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, 0, 0)
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+16}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3),  0)
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+19}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, 0, Math.floor(fxhpma))
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+24}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3), Math.floor(fxhpma))
+      }
+      else {
+        fxctx.filter = `saturate(0) brightness(${52+12}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, 0, 0)
+        fxctx.filter = `saturate(0) brightness(${52+15}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3),  0)
+        fxctx.filter = `saturate(0) brightness(${52+18}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, 0, Math.floor(fxhpma))
+        fxctx.filter = `saturate(0) brightness(${52+24}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3), Math.floor(fxhpma))
+      }
+      fxctx.restore()
+      fxctx.fillStyle="#fff"
+      fxctx.fillRect(0,Math.floor((fxhpma) * 2),fxwidth,fxheight)
+      fxctx.save()
+      
+      if (invert) {
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+11}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2) , destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+16}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 1), destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+19}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 2), destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) invert(1) brightness(${52+24}%) contrast(150%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 3), destwidth, destheight
+        )
+      }
+      else {
+        fxctx.filter = `saturate(0) brightness(${52+12}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2) , destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) brightness(${52+15}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 1), destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) brightness(${52+18}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 2), destwidth, destheight
+        )
+        fxctx.filter = `saturate(0) brightness(${52+24}%) contrast(150%) contrast(150%)`
+        fxctx.drawImage(
+          canvas, 
+          0, destheight - fxhpmb, destwidth, destheight, 
+          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 3), destwidth, destheight
+        )
+      }
+      fxctx.restore()
+      
+      const ldata = fxctx.getImageData(0,0,fxwidth,fxheight).data
+      
+      if (ldata.length > 16700000) {
+        details.error = `fullsize array too large: ${ldata.length}`
+        return this.response(this.details.guess).resumeworker()
+      }
+      const fullsizeblob = new Blob([ldata], {type: "octet/stream"})
+      const fullsizebloburl = URL.createObjectURL(fullsizeblob)
+
+      outbound = id
+      this.outbound = true
+      details.ocrad.fullsize.width = fxwidth
+      details.ocrad.fullsize.height = fxheight
+      details.ocrad.fullsize.url = fullsizebloburl
+
+      worker.postMessage({
+        id,
+        details
+      })
+      return null
+    }
+
+    if (typeof fullsizeurl === "object") {
+      imageloaded(fullsizeurl)
+      return null
+    }
+    let image = new Image()
+    
+    image.onload = () => {
+      imageloaded(image)
+    }
+    image.onerror = () => {
+      details.error = "fullsize load error"
+      return this.response(this.details.guess).resumeworker()
+    }
+    image.src = fullsizeurl
+    return null
   }
   
-  const evalthumb = function(thumb, retry) {
+  Item.prototype.evalthumb = function() {
+
+    const headerHeight = 38
+    const headerWidthDivisor = 6
+    const { thumb, retry } = this
+    
+    if (!thumb.complete) {
+      this.details.error = "broken image"
+      if (!retry) {
+        return {
+          istwitter: false,
+          proceed: false
+        }
+      }
+      else {
+        return {
+          istwitter: false
+        }        
+      }
+    }
     
     const routines = {}
-    const details = {}
+    
+    let details = retry ? {} : this.details
+    
     details.ocrad = {}
     details.ocrad.fullsize = {}
     details.exit = false
@@ -622,20 +940,27 @@ const Istwitterscreenshot = function(config) {
           blueCount: bluecount,
           noCount: nocount,
           noRatio: noratio,
+          x,y,w,h
         }
       }
       
       let footer = null
       let peak = height < 50 ? height : 50
+
       let header = scan(Math.floor(width * (1/6)), 4, (Math.floor(width * (5/6)) - 10), peak)
       textcolor.header = header
+      let left = scan(Math.floor(width * (1/10)), 4, (Math.floor(width * (2/3)) - 10), peak)
+      textcolor.header.left = left
+
       if (height > 80) {
         peak = height < 30 ? height : 30
         footer = scan(Math.floor(width * (1/7)), height-peak-1, (Math.floor(width * (6/7)) - 5), peak)
       }
       textcolor.footer = footer
       let halt = false
-      if (header.primaryColor === null && header.noRatio > .77 && (footer === null || footer && footer.noRatio > .61)) {
+      if ( header.primaryColor === null 
+        && header.noRatio > .77 
+        && (footer === null || footer && footer.noRatio > .61)) {
         halt = true
       }
       return halt
@@ -780,7 +1105,22 @@ const Istwitterscreenshot = function(config) {
       footer.lightGreyRatio = lightgreyratio
       
       if (primarycolor === "white") {
-        
+        // assuming no "like" is clicked (heart/retweet)
+        if ( primaryratio > lightgreyratio
+          && tertiaryratio === 0
+          && primaryratio > 0.5
+          && lightgreyratio < 0.5
+          && primaryratio < .95
+          && lightgreyratio > 0.05
+          && darkgreyratio < 0.01
+          && nonratio < 0.1
+        ) {
+          // good, proceed
+        }
+        else {
+          footer.error = "oob white"
+          return false
+        }        
       }
       else if (primarycolor === "black") {
         // assuming no "like" is clicked (heart/retweet)
@@ -796,6 +1136,7 @@ const Istwitterscreenshot = function(config) {
           // good, proceed
         }
         else {
+          footer.error = "oob black"
           return false
         }
       }
@@ -818,6 +1159,7 @@ const Istwitterscreenshot = function(config) {
         }
       }
       if (!clear) {
+        footer.error = "not clear left"
         return false
       }
       
@@ -836,6 +1178,7 @@ const Istwitterscreenshot = function(config) {
         }
       }
       if (!clear) {
+        footer.error = "not clear right"
         return false
       }
       
@@ -869,14 +1212,15 @@ const Istwitterscreenshot = function(config) {
       footer.blankRatio = blankratio
       footer.nonBlankRatio = nonblankratio
       
-      if (primarycolor === "black") {
-        if (blankratio > 0.41 && blankratio < 0.83) {
-          // good continue
-        }
-        else {
-          return false
-        }
+      //if (primarycolor === "black") {
+      if (blankratio > 0.41 && blankratio < 0.83) {
+        // good continue
       }
+      else {
+        footer.error = "oob blankratio"
+        return false
+      }
+      //}
       
       // top
       clear = true
@@ -895,6 +1239,7 @@ const Istwitterscreenshot = function(config) {
         }
       }
       if (!clear) {
+        footer.error = "not clear top"
         return false
       }
       
@@ -915,10 +1260,11 @@ const Istwitterscreenshot = function(config) {
         }
       }
       if (!clear) {
+        footer.error = "not clear bottom"
         return false
       }
       
-      // bottom
+      // bottom2
       clear = true
       for (let y=height-7;y>=height-10;y--) {
         clear = true
@@ -934,14 +1280,18 @@ const Istwitterscreenshot = function(config) {
           break
         }
       }
+      
       if (clear) {
+        footer.error = "not clear bottom2"
         return false
       }
       
-      if (primarycolor === "black") {
+      if (primarycolor === "black" || primarycolor === "white") {
         return true
       }
+      
       return false
+      
     }
     
     function evalheaderweight() {
@@ -1163,24 +1513,6 @@ const Istwitterscreenshot = function(config) {
           return found
         }
         
-        // function verticalline2() {
-        //   let verticalcanvas = document.createElement('canvas')
-        //   let verticalctx = verticalcanvas.getContext('2d')
-        //   verticalcanvas.width = width
-        //   verticalcanvas.height = height
-        //   verticalctx.filter = "contrast(110%)"
-        //   verticalctx.drawImage(canvas,0,0)
-        //   
-        //   let peak = canvas.height < 25 ? canvas.height : 25
-        //   for (let x=16;x<60;x++) {
-        //     for (let y=3;y<peak;y++) {
-        //       draw(x,y,"cyan")
-        //     }
-        //   }
-        //   
-        //   return true
-        // }
-        
         let vertical = verticalline()
         header.verticalLineRightTest = vertical
         
@@ -1189,14 +1521,6 @@ const Istwitterscreenshot = function(config) {
         
         let lefthorizontal = false
         header.horizontalLineLeftTest = lefthorizontal
-        
-        // let vertical2 = verticalline2()
-        // 
-        // if (!vertical2) {
-        //   response.predom = predom
-        //   return response   
-        // }
-        
         
         let found = true
         if (horizfoundy !== null) {
@@ -2315,10 +2639,7 @@ const Istwitterscreenshot = function(config) {
         details.exit = true
         return {
           istwitter: false,
-          primarycolor: null,
-          proceed: false,
-          foundonpass: null,
-          details
+          proceed: false
         }
       }
       
@@ -2328,10 +2649,7 @@ const Istwitterscreenshot = function(config) {
         details.exit = true
         return {
           istwitter: true,
-          primarycolor: null,
-          proceed: false,
-          foundonpass: null,
-          details
+          proceed: false
         }
       }
       
@@ -2341,11 +2659,7 @@ const Istwitterscreenshot = function(config) {
       if (infound) {
         return {
           istwitter: true,
-          primarycolor: predom,
-          proceed: false,
-          foundonpass: null,
-          details,
-          invert: false
+          proceed: false
         }  
       }
       
@@ -2354,11 +2668,7 @@ const Istwitterscreenshot = function(config) {
         if (infound) {
           return {
             istwitter: true,
-            primarycolor: predom,
-            proceed: false,
-            foundonpass: null,
-            details,
-            invert: false
+            proceed: false
           }  
         }
       }
@@ -2371,10 +2681,7 @@ const Istwitterscreenshot = function(config) {
         if (infound) {
           return {
             istwitter: true,
-            primarycolor: predom,
-            proceed: false,
-            foundonpass: null,
-            details
+            proceed: false
           }
         }
       }
@@ -2394,10 +2701,7 @@ const Istwitterscreenshot = function(config) {
       if (pfp) {
         return {
           istwitter: true,
-          primarycolor: null,
-          proceed: false,
-          foundonpass: 0,
-          details
+          proceed: false
         }      
       }
       
@@ -2406,10 +2710,7 @@ const Istwitterscreenshot = function(config) {
         details.exit = true
         return {
           istwitter: false,
-          primarycolor: null,
-          proceed: false,
-          foundonpass: null,
-          details
+          proceed: false
         }
       }
       
@@ -2424,13 +2725,11 @@ const Istwitterscreenshot = function(config) {
       edges.proceed = proceed
       edges.primaryColor = primarycolor
       
+      this.invert = invert
+      
       return {
         istwitter: false,
-        primarycolor,
-        proceed,
-        foundonpass,
-        details,
-        invert
+        proceed
       }
       
     }
@@ -2446,335 +2745,25 @@ const Istwitterscreenshot = function(config) {
           istwitter: true
         }  
       }
-      
       let pfptest = evalpfp(canvas, 100)
       if (pfptest) {
         return {
           istwitter: true
         } 
       }
-      
       return {
         istwitter: false
       } 
-      
     }
     
     let method = retry ? "second" : "first"
     return routines[method]()
-    
   }
 
-  const evalfullsize = function(args) {
-    
-    let {id, fullsizeurl, details, invert, realfullsize} = args
-    
-    const imgloaded = function(image) {
-      
-      details.retry = false
-      let primarycolor = details.evaluations.textcolor.header.primaryColor
-      
-      // test fullres as thumb for bluecheck, pfp
-      if (primarycolor === "white") {
-        details.retry = true
-        const retry = evalthumb(image, true)
-        let istwitter = retry.istwitter
-        if (istwitter) {
-          response(id, true, details)
-          setTimeout(()=>{
-            workerqueue.resume()
-          },0)
-          return null
-        }
-      }
-      
-      let width = image.width
-      let height = image.height
-      let destwidth = width
-      let destheight = height
-      let canvas = document.createElement("canvas")
-      if (width !== 1000) {
-        destheight = Math.floor((1000/width) * height)
-        destwidth = 1000      
-      }
-      if (destheight > 2800) {
-        details.abort = "image too tall"
-        response(id, false, details)
-        setTimeout(()=>{
-          workerqueue.resume()
-        },0)
-        return null
-      }
-      canvas.width = destwidth
-      canvas.height = destheight
-      let lctx = canvas.getContext("2d")
-      lctx.drawImage(image, 
-        0, 0, width, height, 
-        0, 0, destwidth, destheight
-      )
-      
-      // the color varies
-      // // test for "this account does not exist" screenshots
-      // if (destwidth > 600 && destheight > 600) {
-      //   let clear = true
-      //   for (let x=destwidth-300;x<destwidth-20;x++) {
-      //     for (let y=20;y<140;y++) {
-      //       const color = lctx.getImageData(x,y,1,1).data
-      //       const r = color[0]
-      //       const g = color[1]
-      //       const b = color[2]
-      //       if ((r !== 209 || g !== 217 || b !== 221)) {
-      //         clear = false
-      //         break
-      //       }
-      //     }
-      //     if (!clear) {
-      //       break
-      //     }
-      //   }
-      //   if (clear) {
-      //     for (let x=destwidth-220;x<destwidth-20;x++) {
-      //       clear = true
-      //       for (let y=destheight-140;y<destheight-60;y++) {
-      //         const color = lctx.getImageData(x,y,1,1).data
-      //         const r = color[0]
-      //         const g = color[1]
-      //         const b = color[2]
-      //         if (r !== 255 || g !== 255 || b !== 255) {
-      //           clear = false
-      //           break
-      //         }
-      //       }
-      //       if (!clear) {
-      //         break
-      //       }
-      //     }
-      //     document.body.appendChild(canvas)
-      //     if (clear) {
-      //       details.specific = `account screenshot`
-      //       response(id, true, details)
-      //       setTimeout(()=>{
-      //         workerqueue.resume()
-      //       },0)
-      //       return null
-      //     }
-      //   }
-      // }
-      
-      // trim this canvas with the same percentage as the thumbnail
-      let ct = details.evaluations.crop && details.evaluations.crop.offsetTop   ? details.evaluations.crop.offsetTop   : 0
-      let cl = details.evaluations.crop && details.evaluations.crop.offsetLeft  ? details.evaluations.crop.offsetLeft  : 0
-      let cr = details.evaluations.crop && details.evaluations.crop.offsetRight ? details.evaluations.crop.offsetRight : 0
-      let tt = details.evaluations.trim.top    > 4 ? details.evaluations.trim.top     - 4 : 0
-      let tl = details.evaluations.trim.left   > 4 ? details.evaluations.trim.left    - 4 : 0
-      let tb = details.evaluations.trim.bottom > 4 ? details.evaluations.trim.bottom  - 4 : 0
-      let tr = details.evaluations.trim.right  > 4 ? details.evaluations.trim.right   - 4 : 0
-      
-      ctr = Math.floor((ct / details.thumb.oldHeight) * destheight )
-      clr = Math.floor((cl / details.thumb.oldWidth ) * destwidth  )
-      crr = Math.floor((cr / details.thumb.oldWidth ) * destwidth  )
-      ttr = Math.floor((tt / details.thumb.oldHeight) * destheight )
-      tlr = Math.floor((tl / details.thumb.oldWidth ) * destwidth  )
-      tbr = Math.floor((tb / details.thumb.oldHeight) * destheight )
-      trr = Math.floor((tr / details.thumb.oldWidth ) * destwidth  )
-      
-      let xttl = clr + tlr
-      let xttb = tbr
-      let xttr = crr + trr
-      let xttt = ctr + ttr
-      
-      let xnw = destwidth - xttl - xttr
-      let xnh = destheight - xttt - xttb
-      
-      let clonecanvas = document.createElement('canvas')
-      let clonectx = clonecanvas.getContext('2d')
-      clonecanvas.width = xnw
-      clonecanvas.height = xnh
-      clonectx.drawImage(canvas,(xttl * -1), (xttt * -1))
-      
-      canvas = null
-      lctx = null
-      destwidth = null
-      destheight = null
-      
-      canvas = clonecanvas
-      lctx = clonectx
-      destwidth = xnw
-      destheight = xnh
-      
-      lctx.fillStyle = invert ? "#000" : "#fff"
-      
-      lctx.fillRect(0,0,5,destheight)
-      lctx.fillRect(0,0,destwidth,5)
-      
-      const fxcanvas = document.createElement("canvas")
-      const fxctx = fxcanvas.getContext("2d")
-      let fxwidth
-      let fxheight
-      
-      let fxhpma = (destheight * 1/3) > 500 ? 500 : (destheight * 1/3)
-      let fxhpmb = (destheight * 1/5) > 300 ? 300 : (destheight * 1/5)
-      
-      fxwidth = Math.floor((destwidth * 2/3) * 2)
-      fxheight = Math.floor((fxhpma * 2) + (fxhpmb * 4))
-      
-      fxctx.fillStyle="#fff"
-      fxctx.fillRect(0,0,fxwidth,fxheight)
-      fxcanvas.width = fxwidth
-      fxcanvas.height = fxheight
-      
-      
-      fxctx.save()
-      if (invert) {
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+12}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, 0, 0)
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+16}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3),  0)
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+19}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, 0, Math.floor(fxhpma))
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+24}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3), Math.floor(fxhpma))
-      }
-      else {
-        fxctx.filter = `saturate(0) brightness(${52+12}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, 0, 0)
-        fxctx.filter = `saturate(0) brightness(${52+15}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3),  0)
-        fxctx.filter = `saturate(0) brightness(${52+18}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, 0, Math.floor(fxhpma))
-        fxctx.filter = `saturate(0) brightness(${52+24}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(canvas, Math.floor(destwidth * 2/3), Math.floor(fxhpma))
-      }
-      fxctx.restore()
-      fxctx.fillStyle="#fff"
-      fxctx.fillRect(0,Math.floor((fxhpma) * 2),fxwidth,fxheight)
-      fxctx.save()
-      
-      
-      if (invert) {
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+11}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2) , destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+16}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 1), destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+19}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 2), destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) invert(1) brightness(${52+24}%) contrast(150%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2) + (Math.floor(fxhpmb) * 3), destwidth, destheight
-        )
-      }
-      
-      
-      else {
-        fxctx.filter = `saturate(0) brightness(${52+12}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2) , destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) brightness(${52+15}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 1), destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) brightness(${52+18}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 2), destwidth, destheight
-        )
-        fxctx.filter = `saturate(0) brightness(${52+24}%) contrast(150%) contrast(150%)`
-        fxctx.drawImage(
-          canvas, 
-          0, destheight - fxhpmb, destwidth, destheight, 
-          0, (Math.floor(fxhpma) * 2)  + (Math.floor(fxhpmb) * 3), destwidth, destheight
-        )
-      }
-      fxctx.restore()
-      
-      const ldata = fxctx.getImageData(0,0,fxwidth,fxheight).data
-      
-      if (ldata.length > 16700000) {
-        details.error = `fullsize array too large: ${ldata.length}`
-        let guess = false
-        if (details.guess === true) {
-          guess = true
-        }
-        response(id, guess, details)
-        setTimeout(()=>{
-          workerqueue.resume()
-        },0)
-        return null
-      }
-      
-      const fullsizeblob = new Blob([ldata], {type: "octet/stream"})
-      const fullsizebloburl = URL.createObjectURL(fullsizeblob)
-      outbound.fullsize = fullsizebloburl
-      let guess = false
-      if (details.guess === true) {
-        guess = true
-      }
-      outbound.guess = guess
-      if (debug > 0) {
-        outbound.thumb = details.thumb.url
-      }
-      outbound.id = id
-      details.ocrad.fullsize.width = fxwidth
-      details.ocrad.fullsize.height = fxheight
-      details.ocrad.fullsize.url = fullsizebloburl
-      
-      worker.postMessage({
-        id,
-        details
-      })
-      return null
-    }
-    
-    if (typeof fullsizeurl === "object") {
-      imgloaded(fullsizeurl)
-      return null
-    }
-    
-    let img = new Image()
-    
-    img.onload = () => {
-      imgloaded(img)
-    }
-    
-    img.onerror = () => {
-      details.error = "fullsize load error"
-      let guess = false
-      if (details.guess === true) {
-        guess = true
-      }
-      response(id, guess, details)
-      setTimeout(()=>{
-        workerqueue.resume()
-      },0)
-    }
-    
-    img.src = fullsizeurl
-    
-  }
-  
-  const guessthumb = function(details) {
+  Item.prototype.guessthumb = function() {
+    let details = this.details
     try {
-      if (details.evaluations.header 
+      if ( details.evaluations.header 
         && details.evaluations.header.verticalLineRightTest
         && details.evaluations.header.verticalLineLeftTest
         && details.evaluations.header.horizontalLineRightTest
@@ -2788,88 +2777,101 @@ const Istwitterscreenshot = function(config) {
         && details.evaluations.textcolor.footer.primaryColor === details.evaluations.header.rightPredominantColor
         && details.evaluations.textcolor.footer.primaryRatio > 0.56) {
         details.guess = true
-        return true
       }
       details.guess = false
-      return false
     }
     catch(e) {
-      details.guess = undefined
-      return false
+      details.guess = false
     }
+    return null
   }
   
-  const buildthumbblob = function(details) {
-    const tdata = details.thumb.debugContext.getImageData(
+  Item.prototype.buildthumbblob = function() {
+    const tdata = this.details.thumb.debugContext.getImageData(
       0,
       0,
-      details.thumb.debugCanvas.width,
-      details.thumb.debugCanvas.height
+      this.details.thumb.debugCanvas.width,
+      this.details.thumb.debugCanvas.height
     ).data
     const thumbblob = new Blob([tdata], {type: "octet/stream"})
     const thumbblobburl = URL.createObjectURL(thumbblob)
-    details.thumb.url = thumbblobburl
-    details.thumb.debugContext = null
-    details.thumb.debugCanvas = null
-    details.thumb.width = details.thumb.newWidth
-    details.thumb.height = details.thumb.newHeight
-    delete details.thumb.newWidth
-    delete details.thumb.newHeight
-    delete details.thumb.debugContext
-    delete details.thumb.debugCanvas
+    this.details.thumb.url = thumbblobburl
+    this.details.thumb.debugContext = null
+    this.details.thumb.debugCanvas = null
+    this.details.thumb.width = this.details.thumb.newWidth
+    this.details.thumb.height = this.details.thumb.newHeight
+    delete this.details.thumb.newWidth
+    delete this.details.thumb.newHeight
+    delete this.details.thumb.debugContext
+    delete this.details.thumb.debugCanvas
     return null
-  }
-
-  const workerqueue = new Queue(evalfullsize)
-
-  const init = function(id, thumb, fullsizeurl) {
-    
-    const {istwitter, proceed, details, invert} = evalthumb(thumb, false)
-    
-    if (debug > 0) {
-      buildthumbblob(details)
-    }
-    if (istwitter) {
-      return response(id, istwitter, details)
-    }
-    if (!proceed) {
-      return response(id, false, details)
-    }
-    const guess = guessthumb(details)
-    
-    if (!fullsizeurl && thumb.width < 500) {
-      return response(id, guess, details)
-    }
-    else if (!fullsizeurl && thumb.width >= 500) {
-      workerqueue.push({
-        id, 
-        realfullsize: false, 
-        fullsizeurl: thumb, 
-        details, 
-        invert
-      })
-    }
-    else {
-      workerqueue.push({
-        id, 
-        realfullsize: true, 
-        fullsizeurl, 
-        details, 
-        invert
-      })
-    }
-    return null
-  }
-    
-  this.request = function(thumb, fullsizeurl) {
-    const id = ++uid
-    times[id] = performance.now()
-    return new Promise((resolve, reject) => {
-      promises[id] = {resolve, reject}
-      setTimeout(()=>{
-        init(id, thumb, fullsizeurl)
-      },0)
-    })
   }
   
+  Item.prototype.response = function(result) {
+    const { id, time, cancelled, details } = this
+    details.result = result
+    details.cancelled = cancelled
+    details.id = id
+    let newtime = performance.now()
+    let oldtime = time
+    let elapsed = newtime - oldtime
+    details.time = elapsed
+    let response = !debug ? result : {result, details}
+    this.resolve(response)
+    delete items[id]
+    return {
+      resumeworker: workerqueue.resume,
+      resumeinit: initqueue.resume
+    }
+  }
+  
+  Item.prototype.init = function() {
+    const { istwitter, proceed } = this.evalthumb()
+    if (debug > 0) {
+      this.buildthumbblob()
+    }
+    if (istwitter) {
+      return this.response(true).resumeinit()
+    }
+    if (!proceed) {
+      return this.response(false).resumeinit()
+    }
+    this.guessthumb()
+    
+    if (!this.fullsizeurl && this.thumb.width < 500) {
+      return this.response(this.details.guess).resumeinit()
+    }
+    else {
+      this.workerqueued = true
+      workerqueue.push(this)
+      initqueue.resume()
+    }
+    return null
+  }
+
+  this.cancel = function(token) {
+    for (id in items) {
+      if (items[id].token === token) {
+        if (debug > 0) {
+          console.log(`item ${id} cancelled...`)
+        }
+        items[id].cancelled = true
+      }
+    }
+    return null
+  }
+  
+  this.createToken = function() {
+    return ++uid
+  }
+
+  this.request = function(thumb, fullsizeurl, token) {
+    if (!thumb || !IsImageOk(thumb)) {
+      return debug > 0 ? {result: false, details: {}} : false
+    }
+    return new Promise((resolve, reject) => {
+      new Item(resolve, reject, thumb, fullsizeurl, token)
+    })
+  }
+
 }

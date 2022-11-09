@@ -9,7 +9,10 @@ const request = function(portname, threadid, thumburl, fullsizeurl) {
   try {
     const thumb = new Image()
     thumb.onload = async function() {
-      let result = await istwitterscreenshot.request(thumb, fullsizeurl)
+      if (!ports[portname]) {
+        return null
+      }
+      let result = await istwitterscreenshot.request(thumb, fullsizeurl, portname)
       if (ports[portname]) {
         let buffer = {
           type: "response", 
@@ -102,6 +105,7 @@ chrome.runtime.onConnect.addListener(function(port) {
   })
 
   port.onDisconnect.addListener(function() {
+    istwitterscreenshot.cancel(portname)
     port = null
     delete ports[portname]
     buffers[portname] = []
