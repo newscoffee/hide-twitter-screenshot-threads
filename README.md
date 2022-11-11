@@ -17,9 +17,8 @@ it occasionally results in false positives and false negatives, but from my test
 - enable *Developer Mode*.
 - drag the hide-twitter-screenshot-threads-master folder anywhere on the page to import it (do not delete the folder afterwards).
 
-
 #### firefox
-the latest version `1.0.3` of this extension is available as an [XPI file](https://github.com/newscoffee/hide-twitter-screenshot-threads/releases/download/1.0.3/hide-twitter-screenshot-threads-firefox-1.0.3.xpi).
+in progress
 
 ---
 
