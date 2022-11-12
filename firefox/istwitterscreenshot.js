@@ -488,6 +488,8 @@ const Istwitterscreenshot = function(config) {
     }
     let image = new Image()
     
+    image.crossOrigin = "anonymous"
+    
     image.onload = () => {
       imageloaded(image)
     }
