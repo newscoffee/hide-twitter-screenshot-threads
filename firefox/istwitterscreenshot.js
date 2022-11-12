@@ -1,5 +1,5 @@
 // https://github.com/fanfare/istwitterscreenshot
-// istwitterscreenshot v0.0.4
+// istwitterscreenshot v0.0.5
 
 const Istwitterscreenshot = function(config) {
 
@@ -505,6 +505,17 @@ const Istwitterscreenshot = function(config) {
     const headerWidthDivisor = 6
     const { thumb, retry } = this
     
+    let uint = null
+    
+    function finder(x,y) {
+      const c = (x*4) + (y*width*4)
+      return [uint[c],uint[c+1],uint[c+2]]
+    }
+
+    function updatesize(ctx,width,height) {
+      uint = ctx.getImageData(0,0,width,height).data
+    }
+    
     if (!thumb.complete) {
       this.details.error = "broken image"
       if (!retry) {
@@ -575,6 +586,7 @@ const Istwitterscreenshot = function(config) {
       details.lastEvaluation = "crop"
       details.evaluations.crop = {}
       let crop = details.evaluations.crop
+      updatesize(ctx,width,height)
       function bgcolortest(r,g,b) {
         let colsum = r + g + b
         let desaturated = 
@@ -597,9 +609,9 @@ const Istwitterscreenshot = function(config) {
         else {
           return null
         }
-      }  
+      }
       function bgcolorpick(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         const r = color[0]
         const g = color[1]
         const b = color[2]
@@ -729,6 +741,7 @@ const Istwitterscreenshot = function(config) {
       details.lastEvaluation = "trim"
       details.evaluations.trim = {}
       let trim = details.evaluations.trim
+      updatesize(ctx,width,height)
       function bgcolortest(r,g,b) {
         let colsum = r + g + b
         let desaturated = 
@@ -753,7 +766,7 @@ const Istwitterscreenshot = function(config) {
         }
       }  
       function bgcolorpick(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         const r = color[0]
         const g = color[1]
         const b = color[2]
@@ -970,6 +983,7 @@ const Istwitterscreenshot = function(config) {
       details.lastEvaluation = "footer"
       details.evaluations.footer = {}
       let footer = details.evaluations.footer
+      updatesize(ctx,width,height)
       let allcount = 0
       let whitecount = 0
       let blackcount = 0
@@ -978,7 +992,7 @@ const Istwitterscreenshot = function(config) {
       let noncount = 0
       
       function subsurpass(x,y,primary) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         let r = color[0]
         let g = color[1]
         let b = color[2]
@@ -1008,7 +1022,7 @@ const Istwitterscreenshot = function(config) {
       }
       
       function surpass(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         let r = color[0]
         let g = color[1]
         let b = color[2]
@@ -1308,6 +1322,7 @@ const Istwitterscreenshot = function(config) {
       let header = details.evaluations.header
       header.headerHeight = headerHeight
       header.headerWidthDivisor = headerWidthDivisor
+      updatesize(ctx,width,height)
       let response = {
         infound: false,
         predom: null
@@ -1348,7 +1363,7 @@ const Istwitterscreenshot = function(config) {
         }
       }  
       function bgcolorpick(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         const r = color[0]
         const g = color[1]
         const b = color[2]
@@ -1606,10 +1621,11 @@ const Istwitterscreenshot = function(config) {
       details.lastEvaluation = "checkmark"
       details.evaluations.checkmark = {}
       let checkmark = details.evaluations.checkmark
+      updatesize(ctx,width,height)
       let fourth = Math.floor(width/4)
       let fifth = Math.floor(width/5)
       function surpass(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         let r = color[0]
         let g = color[1]
         let b = color[2]
@@ -1877,8 +1893,9 @@ const Istwitterscreenshot = function(config) {
       canvas.height = height
       ctx.filter = `contrast(${contrast}%)`
       ctx.drawImage(gcanvas,0,0)
+      updatesize(ctx,width,height)
       function pxtest(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         return bgcolortest(color[0],color[1],color[2])  
       }
       let primarycolor = null
@@ -2311,6 +2328,7 @@ const Istwitterscreenshot = function(config) {
       clonecanvas.height = canvas.height
       clonectx.filter = "contrast(130%)"
       clonectx.drawImage(canvas,0,0,canvas.width,canvas.height,0,0,clonecanvas.width,clonecanvas.height)
+      updatesize(clonectx,clonecanvas.width,clonecanvas.height)
       function bgcolortest(r,g,b) {
         let colsum = r + g + b
         let desaturated = 
@@ -2335,7 +2353,7 @@ const Istwitterscreenshot = function(config) {
         }
       }  
       function bgcolorpick(x,y) {
-        const color = clonectx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         const r = color[0]
         const g = color[1]
         const b = color[2]
@@ -2378,7 +2396,7 @@ const Istwitterscreenshot = function(config) {
       let proceed = false
       let primarycolor = null
       let foundonpass = 0
-
+      updatesize(ctx,width,height)
       function bgcolortest(r,g,b) {
         let colsum = r + g + b
         let desaturated = 
@@ -2407,7 +2425,7 @@ const Istwitterscreenshot = function(config) {
       }  
 
       function bgcolorpick(x,y) {
-        const color = ctx.getImageData(x,y,1,1).data
+        const color = finder(x,y)
         const r = color[0]
         const g = color[1]
         const b = color[2]
