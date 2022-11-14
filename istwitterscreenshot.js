@@ -1,5 +1,5 @@
 // https://github.com/fanfare/istwitterscreenshot
-// istwitterscreenshot v0.0.5
+// istwitterscreenshot v0.0.7
 
 const Istwitterscreenshot = function(config) {
 
@@ -487,6 +487,8 @@ const Istwitterscreenshot = function(config) {
       return null
     }
     let image = new Image()
+    
+    image.crossOrigin = "anonymous"
     
     image.onload = () => {
       imageloaded(image)
@@ -1776,8 +1778,9 @@ const Istwitterscreenshot = function(config) {
       twitterblue.quarterTotalSum = totalsum
       twitterblue.quarterTwitterblueSum = istwitterblue
       twitterblue.quarterTwitterblueRatio = twitterblueratio
-      let verytwitterblue = 0
+      let verytwitterblue1 = 0
       let verytwitterblue2 = 0
+      let verytwitterblue3 = 0
       totalsum = 0
       imagedata = ctx.getImageData(
         0,0,width,height
@@ -1789,23 +1792,28 @@ const Istwitterscreenshot = function(config) {
         let g = data[i+1]
         let b = data[i+2]
         if ( r === 22 && g === 32 && b === 41 ) {
-          verytwitterblue++
+          verytwitterblue1++
         }
         else if (r === 27 && g === 41 && b === 54) {
           verytwitterblue2++
         }
+        else if (r === 24 && g === 31 && b === 41) {
+          verytwitterblue3++
+        }
       }
-      let verytwitterblueratio = verytwitterblue/totalsum
+      let verytwitterblue1ratio = verytwitterblue1/totalsum
       let verytwitterblue2ratio = verytwitterblue2/totalsum
+      let verytwitterblue3ratio = verytwitterblue3/totalsum
       twitterblue.fullTotalSum = totalsum
-      twitterblue.fullVeryTwitterblueSum = verytwitterblue
+      twitterblue.fullVeryTwitterblue1Sum = verytwitterblue1
       twitterblue.fullVeryTwitterblue2Sum = verytwitterblue2
-      twitterblue.fullVeryTwitterblueRatio = verytwitterblueratio
+      twitterblue.fullVeryTwitterblue3Sum = verytwitterblue3
+      twitterblue.fullVeryTwitterblue1Ratio = verytwitterblue1ratio
       twitterblue.fullVeryTwitterblue2Ratio = verytwitterblue2ratio
-      if (verytwitterblueratio > .094) {
-        return true
-      }
-      else if (verytwitterblue2ratio > .094) {
+      twitterblue.fullVeryTwitterblue3Ratio = verytwitterblue3ratio
+      if ( verytwitterblue1ratio > .094
+        || verytwitterblue2ratio > .094
+        || verytwitterblue3ratio > .094 ) {
         return true
       }
       return false
@@ -2363,17 +2371,46 @@ const Istwitterscreenshot = function(config) {
       let ypass = 0
       let found
       let colors = ["white", "black"]
+      let bypass = 8
+      let bypassing = false
+      let bypassed = false
       for (let i=0;i<2;i++) {
         found = colors[i]
         let color = colors[i]
         for (let y=2;y<clonecanvas.height-2;y++) {
+          bypass = 8
+          bypassing = false
           let clear = true
           ypass = y
           for (let x=6;x<clonecanvas.width-16;x++) {
             let test = bgcolorpick(x,y)
             if (test !== color) {
-              clear = false
-              break
+              if (x < Math.floor(width/5)) {
+                if (bypassed) {
+                  clear = false
+                  break                   
+                }
+                if (!bypassing) {
+                  bypassing = true
+                }
+                bypass--
+                if (bypass <= 0) {
+                  clear = false
+                  break                  
+                }
+              }
+              else {
+                clear = false
+                break
+              }
+            }
+            else {
+              if (x < Math.floor(width/5)) {
+                if (bypassing) {
+                  bypassing = false
+                  bypassed = true
+                }
+              }              
             }
           }
           if (clear) {
