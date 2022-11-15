@@ -1,6 +1,12 @@
 # hide twitter screenshot threads
 
-![hide twitter screenshot threads](https://i.jollo.org/m911dJwE.png)
+![hide twitter screenshot threads](https://camo.githubusercontent.com/0a85678a716caeba7e302e92f00858717e0e76bbcc3b698558f0b35d5aa09c8d/68747470733a2f2f692e696d6775722e636f6d2f4f5a57723077562e706e67)
+
+this is a manifest v2 extension for use on image boards; it will attempt to automatically hide threads which use a twitter screenshot as the main image.
+
+it occasionally results in false positives and false negatives, but from my testing it works pretty well; this extension might be worth considering if you are really fed up with twitter screenshot threads.
+
+---
 
 ### installation
 #### chrome
@@ -9,21 +15,10 @@
 - unzip the file and you should have a folder named `hide-twitter-screenshot-threads-master`.
 - in chrome, go to the extensions page (`chrome://extensions`).
 - enable *Developer Mode* (top right corner).
-- drag the hide-twitter-screenshot-threads-master folder anywhere on the page to import it (do not delete the folder afterwards).
+- drag the `hide-twitter-screenshot-threads-master` folder anywhere on the page to import it (do not delete the folder afterwards).
 
 #### firefox
 the latest version `1.0.8` is available as an [XPI file](https://github.com/newscoffee/hide-twitter-screenshot-threads/releases/download/1.0.8/hide-twitter-screenshot-threads-firefox-1.0.8.xpi).
-
----
-
-### about
-this is a manifest v2 extension for use on image boards; it will attempt to automatically hide threads which use a twitter screenshot as the main image.
-
-it occasionally results in false positives and false negatives, but from my testing it works pretty well; this extension might be worth considering if you are really fed up with twitter screenshot threads.
-
-
-
-
 
 ---
 
