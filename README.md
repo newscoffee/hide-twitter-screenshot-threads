@@ -29,6 +29,4 @@ if it is uncertain as to whether it is or isn't, it will only then download the 
 
 after a thread is hidden, it will append a 'view' link and if you hover over the link, it will show a preview of the thread with a twitter logo overlay.
 
-![hovering over view link](https://i.imgur.com/ZEes6MF.png)
-
 you can also pin the extension's icon to the top, and a badge indicator will show how many twitter screenshot threads have been hidden on the page.
